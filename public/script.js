@@ -64,13 +64,13 @@ function initPeer(userId, isInitiator) {
     iceServers: [
       { urls: "stun:stun.l.google.com:19302" },
       {
-        urls: "turn:your-turn-server-ip:3478", // TURN sunucusu eklenmiştir
+        urls: "turn:myturnserver.com:3478", // TURN Sunucusu IP veya alan adı
         username: "webrtc_user",
         credential: "StrongP@ssw0rd123",
       },
     ],
+    iceCandidatePoolSize: 10, // Daha hızlı bağlantı için ICE havuzu
   });
-  peers[userId] = peer;
 
   // Mikrofon stream'ini ekle
   if (localStream) {
