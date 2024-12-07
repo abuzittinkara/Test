@@ -69,10 +69,18 @@ function initPeer(userId, isInitiator) {
     ],
   });
 
+  // Peer'i peers listesine ekle
   peers[userId] = peer;
 
+  // Eğer localStream varsa, aynı track'in eklenmesini önle
   if (localStream) {
-    localStream.getTracks().forEach((track) => peer.addTrack(track, localStream));
+    localStream.getTracks().forEach((track) => {
+      const senders = peer.getSenders();
+      const alreadyAdded = senders.some(sender => sender.track === track);
+      if (!alreadyAdded) {
+        peer.addTrack(track, localStream);
+      }
+    });
   }
 
   // ICE Candidate süreci
@@ -88,14 +96,17 @@ function initPeer(userId, isInitiator) {
   // ICE bağlantı durumu değişiklikleri
   peer.oniceconnectionstatechange = () => {
     console.log("ICE bağlantı durumu:", peer.iceConnectionState);
-    if (peer.iceConnectionState === 'failed') {
-      console.error('ICE bağlantısı başarısız oldu!');
+    if (peer.iceConnectionState === "failed") {
+      console.error("ICE bağlantısı başarısız oldu!");
     }
   };
 
   // Peer bağlantı durumu değişiklikleri
   peer.onconnectionstatechange = () => {
     console.log("Peer bağlantı durumu:", peer.connectionState);
+    if (peer.connectionState === "failed") {
+      console.error("Peer bağlantısı başarısız oldu!");
+    }
   };
 
   // Remote stream alındığında
@@ -105,8 +116,8 @@ function initPeer(userId, isInitiator) {
       const audio = new Audio();
       audio.srcObject = event.streams[0];
 
-      const playButton = document.getElementById('startCall');
-      playButton.addEventListener('click', () => {
+      const playButton = document.getElementById("startCall");
+      playButton.addEventListener("click", () => {
         audio.play().catch((err) => console.error("Ses oynatılamadı:", err));
       });
       console.log("Remote stream bağlı, sesi başlatmak için butona tıklayın.");
