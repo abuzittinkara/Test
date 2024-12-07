@@ -18,14 +18,14 @@ navigator.mediaDevices.getUserMedia({ audio: true })
 socket.on("users", (users) => {
   console.log("Mevcut kullanıcılar:", users);
   users.forEach((userId) => {
-    initPeer(userId, false);  // Yeni peer oluştur ve offer gönder
+    initPeer(userId, false); // Yeni peer oluştur ve offer gönder
   });
 });
 
 // Yeni bir kullanıcı bağlandığında
 socket.on("new-user", (userId) => {
   console.log("Yeni kullanıcı bağlandı:", userId);
-  initPeer(userId, true);  // Yeni peer oluştur ve answer bekle
+  initPeer(userId, true); // Yeni peer oluştur ve answer bekle
 });
 
 // Signal alımı
@@ -68,22 +68,6 @@ function initPeer(userId, isInitiator) {
       },
     ],
   });
-  
-  peer.onicecandidate = (event) => {
-    if (event.candidate) {
-      console.log("ICE Candidate:", event.candidate);
-    } else {
-      console.log("ICE Candidate süreci tamamlandı.");
-    }
-  };
-  
-  peer.oniceconnectionstatechange = () => {
-    console.log("ICE Connection State:", peer.iceConnectionState);
-  };
-  
-  peer.onconnectionstatechange = () => {
-    console.log("Peer Connection State:", peer.connectionState);
-  };  
 
   peers[userId] = peer;
 
@@ -91,6 +75,7 @@ function initPeer(userId, isInitiator) {
     localStream.getTracks().forEach((track) => peer.addTrack(track, localStream));
   }
 
+  // ICE Candidate süreci
   peer.onicecandidate = (event) => {
     if (event.candidate) {
       console.log("Yeni ICE Candidate oluşturuldu:", event.candidate);
@@ -100,23 +85,26 @@ function initPeer(userId, isInitiator) {
     }
   };
 
+  // ICE bağlantı durumu değişiklikleri
   peer.oniceconnectionstatechange = () => {
-    console.log("ICE connection state:", peer.iceConnectionState);
+    console.log("ICE bağlantı durumu:", peer.iceConnectionState);
     if (peer.iceConnectionState === 'failed') {
       console.error('ICE bağlantısı başarısız oldu!');
     }
-  };  
-
-  peer.onconnectionstatechange = () => {
-    console.log("PeerConnection durumu:", peer.connectionState);
   };
 
+  // Peer bağlantı durumu değişiklikleri
+  peer.onconnectionstatechange = () => {
+    console.log("Peer bağlantı durumu:", peer.connectionState);
+  };
+
+  // Remote stream alındığında
   peer.ontrack = (event) => {
     console.log("Remote stream alındı:", event.streams[0]);
     if (event.streams[0]) {
       const audio = new Audio();
       audio.srcObject = event.streams[0];
-      
+
       const playButton = document.getElementById('startCall');
       playButton.addEventListener('click', () => {
         audio.play().catch((err) => console.error("Ses oynatılamadı:", err));
@@ -125,7 +113,15 @@ function initPeer(userId, isInitiator) {
     } else {
       console.error("Remote stream alınamadı.");
     }
-  };  
+  };
+
+  // Eğer bağlantıyı başlatan kişi ise offer oluştur
+  if (isInitiator) {
+    createOffer(peer, userId);
+  }
+
+  return peer;
+}
 
 // Offer oluşturma fonksiyonu
 async function createOffer(peer, userId) {
@@ -136,19 +132,6 @@ async function createOffer(peer, userId) {
     socket.emit("signal", { to: userId, signal: peer.localDescription });
   } catch (error) {
     console.error("Offer oluşturulurken hata oluştu:", error);
-  }
-}
-
-// Offer sinyalini işleyen fonksiyon
-async function handleOffer(peer, userId, signal) {
-  try {
-    await peer.setRemoteDescription(new RTCSessionDescription(signal));
-    const answer = await peer.createAnswer();
-    await peer.setLocalDescription(answer);
-    console.log("Bağlantıya cevap verildi:", answer);
-    socket.emit("signal", { to: userId, signal: peer.localDescription });
-  } catch (error) {
-    console.error("Offer işlenirken hata oluştu:", error);
   }
 }
 
