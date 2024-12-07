@@ -18,14 +18,14 @@ navigator.mediaDevices.getUserMedia({ audio: true })
 socket.on("users", (users) => {
   console.log("Mevcut kullanıcılar:", users);
   users.forEach((userId) => {
-    initPeer(userId, false);
+    initPeer(userId, false);  // Yeni peer oluştur ve offer gönder
   });
 });
 
 // Yeni bir kullanıcı bağlandığında
 socket.on("new-user", (userId) => {
   console.log("Yeni kullanıcı bağlandı:", userId);
-  initPeer(userId, true);
+  initPeer(userId, true);  // Yeni peer oluştur ve answer bekle
 });
 
 // Signal alımı
@@ -42,11 +42,7 @@ socket.on("signal", async (data) => {
 
   try {
     if (signal.type === "offer") {
-      await peer.setRemoteDescription(new RTCSessionDescription(signal));
-      const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
-      console.log("Bağlantıya cevap verildi:", answer);
-      socket.emit("signal", { to: from, signal: peer.localDescription });
+      await handleOffer(peer, from, signal);
     } else if (signal.type === "answer") {
       await peer.setRemoteDescription(new RTCSessionDescription(signal));
     } else if (signal.candidate) {
@@ -114,6 +110,7 @@ function initPeer(userId, isInitiator) {
   return peer;
 }
 
+// Offer oluşturma fonksiyonu
 async function createOffer(peer, userId) {
   try {
     const offer = await peer.createOffer();
@@ -125,6 +122,20 @@ async function createOffer(peer, userId) {
   }
 }
 
+// Offer sinyalini işleyen fonksiyon
+async function handleOffer(peer, userId, signal) {
+  try {
+    await peer.setRemoteDescription(new RTCSessionDescription(signal));
+    const answer = await peer.createAnswer();
+    await peer.setLocalDescription(answer);
+    console.log("Bağlantıya cevap verildi:", answer);
+    socket.emit("signal", { to: userId, signal: peer.localDescription });
+  } catch (error) {
+    console.error("Offer işlenirken hata oluştu:", error);
+  }
+}
+
+// WebSocket bağlantı durumu
 socket.on("connect", () => {
   console.log("WebSocket bağlantısı kuruldu. Kullanıcı ID:", socket.id);
 });
@@ -133,6 +144,7 @@ socket.on("disconnect", () => {
   console.log("WebSocket bağlantısı kesildi.");
 });
 
+// Debug için bağlantı kontrol logları
 setInterval(() => {
   console.log("Mevcut PeerConnection'lar:", peers);
 }, 10000);
