@@ -56,7 +56,6 @@ socket.on("signal", async (data) => {
   }
 });
 
-// Peer oluşturma fonksiyonu
 function initPeer(userId, isInitiator) {
   const peer = new RTCPeerConnection({
     iceServers: [
