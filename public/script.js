@@ -5,7 +5,7 @@ let peers = {};
 // Mikrofon erişimi al ve debug logları ekle
 navigator.mediaDevices.getUserMedia({ audio: true })
   .then((stream) => {
-    console.log("Mikrofon erişimi verildi:", stream); 
+    console.log("Mikrofon erişimi verildi:", stream);
     localStream = stream;
 
     stream.getTracks().forEach((track) => {
@@ -40,17 +40,21 @@ socket.on("signal", async (data) => {
     peer = peers[from];
   }
 
-  if (signal.type === "offer") {
-    await peer.setRemoteDescription(new RTCSessionDescription(signal));
-    const answer = await peer.createAnswer();
-    await peer.setLocalDescription(answer);
-    console.log("Bağlantıya cevap verildi:", answer);
-    socket.emit("signal", { to: from, signal: peer.localDescription });
-  } else if (signal.type === "answer") {
-    await peer.setRemoteDescription(new RTCSessionDescription(signal));
-  } else if (signal.candidate) {
-    await peer.addIceCandidate(new RTCIceCandidate(signal));
-    console.log("ICE Candidate eklendi:", signal);
+  try {
+    if (signal.type === "offer") {
+      await peer.setRemoteDescription(new RTCSessionDescription(signal));
+      const answer = await peer.createAnswer();
+      await peer.setLocalDescription(answer);
+      console.log("Bağlantıya cevap verildi:", answer);
+      socket.emit("signal", { to: from, signal: peer.localDescription });
+    } else if (signal.type === "answer") {
+      await peer.setRemoteDescription(new RTCSessionDescription(signal));
+    } else if (signal.candidate) {
+      await peer.addIceCandidate(new RTCIceCandidate(signal));
+      console.log("ICE Candidate eklendi:", signal);
+    }
+  } catch (error) {
+    console.error("Signal işlenirken hata oluştu:", error);
   }
 });
 
@@ -59,6 +63,11 @@ function initPeer(userId, isInitiator) {
   const peer = new RTCPeerConnection({
     iceServers: [
       { urls: "stun:stun.l.google.com:19302" },
+      {
+        urls: "turn:your-turn-server-ip:3478", // TURN sunucusu eklenmiştir
+        username: "webrtc_user",
+        credential: "StrongP@ssw0rd123",
+      },
     ],
   });
   peers[userId] = peer;
@@ -116,10 +125,14 @@ function initPeer(userId, isInitiator) {
 
 // Offer oluşturma fonksiyonu
 async function createOffer(peer, userId) {
-  const offer = await peer.createOffer();
-  await peer.setLocalDescription(offer);
-  console.log("Offer oluşturuldu ve gönderildi:", offer);
-  socket.emit("signal", { to: userId, signal: peer.localDescription });
+  try {
+    const offer = await peer.createOffer();
+    await peer.setLocalDescription(offer);
+    console.log("Offer oluşturuldu ve gönderildi:", offer);
+    socket.emit("signal", { to: userId, signal: peer.localDescription });
+  } catch (error) {
+    console.error("Offer oluşturulurken hata oluştu:", error);
+  }
 }
 
 // WebSocket bağlantı durumu
