@@ -47,32 +47,16 @@ socket.on("new-user", (userId) => {
 // Signal alımı
 socket.on("signal", async (data) => {
   try {
-    console.log("Signal alındı:", data);
     const { from, signal } = data;
 
-    let peer;
-    // Eğer PeerConnection yoksa yeni bir tane oluştur.
+    // Eğer PeerConnection mevcut değilse oluştur
     if (!peers[from]) {
-      peer = initPeer(from, false);
-    } else {
-      peer = peers[from];
+      peers[from] = initPeer(from, false);
     }
 
-    // PeerConnection kontrolü
-    if (!peer) {
-      console.error("PeerConnection bulunamadı:", from);
-      return;
-    }
+    const peer = peers[from];
 
-    // SDP kontrolü
-    if (signal.type === "offer" || signal.type === "answer") {
-      if (!signal.sdp) {
-        console.error("SDP eksik:", signal);
-        return;
-      }
-    }
-
-    // Signal tipi "offer" ise
+    // Offer işleme
     if (signal.type === "offer") {
       console.log("Offer sinyali alındı, işlem başlatılıyor.");
       await peer.setRemoteDescription(new RTCSessionDescription(signal));
@@ -80,25 +64,30 @@ socket.on("signal", async (data) => {
       await peer.setLocalDescription(answer);
       console.log("Answer oluşturuldu ve gönderildi.");
       socket.emit("signal", { to: from, signal: peer.localDescription });
-
-    // Signal tipi "answer" ise
-    } else if (signal.type === "answer") {
+    } 
+    // Answer işleme
+    else if (signal.type === "answer") {
       console.log("Answer sinyali alındı, remote description ayarlanıyor.");
       await peer.setRemoteDescription(new RTCSessionDescription(signal));
-
-    // Signal bir ICE Candidate ise
-    } else if (signal.candidate) {
+    } 
+    // ICE Candidate işleme
+    else if (signal.candidate) {
       console.log("ICE Candidate alındı:", signal.candidate);
-      // Remote description mevcutsa ICE Candidate ekle.
       if (peer.remoteDescription) {
         await peer.addIceCandidate(new RTCIceCandidate(signal));
         console.log("ICE Candidate başarıyla eklendi.");
       } else {
-        console.warn("Remote description ayarlanmamış, ICE Candidate bekletiliyor.");
+        console.warn("Remote description ayarlanmadan ICE Candidate geldi.");
       }
     }
   } catch (error) {
     console.error("Signal işlenirken hata oluştu:", error);
+
+    // Hata durumunda PeerConnection kapatılır ve temizlenir
+    if (peers[from]) {
+      peers[from].close();
+      delete peers[from];
+    }
   }
 });
 
@@ -108,63 +97,55 @@ function initPeer(userId, isInitiator) {
     iceServers: [
       { urls: "stun:stun.l.google.com:19302" },
       {
-        urls: "turn:31.223.49.197:3478", 
+        urls: "turn:31.223.49.197:3478",
         username: "webrtc_user",
         credential: "StrongP@ssw0rd123",
       },
     ],
   });
 
-  peers[userId] = peer;
+  // Eğer peer daha önce oluşturulmuşsa tekrar ekleme yapma
+  if (!peers[userId]) {
+    peers[userId] = peer;
 
-  if (localStream) {
-    localStream.getTracks().forEach((track) => peer.addTrack(track, localStream));
-}
+    if (localStream) {
+      localStream.getTracks().forEach((track) => {
+        const senders = peer.getSenders();
+        const alreadyAdded = senders.some(sender => sender.track === track);
+        if (!alreadyAdded) {
+          peer.addTrack(track, localStream);
+        }
+      });
+    }
+  }
 
-  // ICE Candidate süreci
   peer.onicecandidate = (event) => {
     if (event.candidate) {
-      console.log("Yeni ICE Candidate oluşturuldu:", event.candidate);
       socket.emit("signal", { to: userId, signal: event.candidate });
     } else {
       console.log("ICE Candidate süreci tamamlandı.");
     }
-  };  
-
-  // ICE bağlantı durumu değişiklikleri
-  peer.oniceconnectionstatechange = () => {
-    console.log("ICE bağlantı durumu:", peer.iceConnectionState);
-    if (peer.iceConnectionState === 'failed') {
-      console.error('ICE bağlantısı başarısız oldu!');
-    }
   };
 
-  // Peer bağlantı durumu değişiklikleri
-  peer.onconnectionstatechange = () => {
-    console.log("Peer bağlantı durumu:", peer.connectionState);
-  };
-
-  // Remote stream alındığında
   peer.ontrack = (event) => {
     console.log("Remote stream alındı:", event.streams[0]);
-
+    
     if (event.streams[0]) {
-        const audio = new Audio();
-        audio.srcObject = event.streams[0];
-
-        // Otomatik çalma (modern tarayıcılarda kullanıcı etkileşimi gerekebilir)
-        audio.autoplay = true;
-
-        // Opsiyonel: Ses kontrolü için DOM'a ekle
-        document.body.appendChild(audio);
-
-        console.log("Remote stream bağlı ve ses çalmaya başladı.");
+      const audio = new Audio();
+      audio.srcObject = event.streams[0];
+  
+      // Mevcut buton olan "startCall" için olay bağlama işlemi
+      const playButton = document.getElementById("startCall");
+      playButton.addEventListener("click", () => {
+        audio.play().catch(err => console.error("Ses oynatılamadı:", err));
+      });
+  
+      console.log("Ses için 'Sesi Başlat' butonunu kullanın.");
     } else {
-        console.error("Remote stream alınamadı.");
+      console.error("Remote stream alınamadı.");
     }
-};
+  };  
 
-  // Eğer bağlantıyı başlatan kişi ise offer oluştur
   if (isInitiator) {
     createOffer(peer, userId);
   }
@@ -191,6 +172,10 @@ socket.on("connect", () => {
 
 socket.on("disconnect", () => {
   console.log("WebSocket bağlantısı kesildi.");
+  Object.keys(peers).forEach((peerId) => {
+    peers[peerId].close();
+    delete peers[peerId];
+  });
 });
 
 // Debug için bağlantı kontrol logları
