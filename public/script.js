@@ -73,7 +73,7 @@ function initPeer(userId, isInitiator) {
 
   if (localStream) {
     localStream.getTracks().forEach((track) => peer.addTrack(track, localStream));
-  }
+}
 
   // ICE Candidate süreci
   peer.onicecandidate = (event) => {
@@ -101,19 +101,22 @@ function initPeer(userId, isInitiator) {
   // Remote stream alındığında
   peer.ontrack = (event) => {
     console.log("Remote stream alındı:", event.streams[0]);
-    if (event.streams[0]) {
-      const audio = new Audio();
-      audio.srcObject = event.streams[0];
 
-      const playButton = document.getElementById('startCall');
-      playButton.addEventListener('click', () => {
-        audio.play().catch((err) => console.error("Ses oynatılamadı:", err));
-      });
-      console.log("Remote stream bağlı, sesi başlatmak için butona tıklayın.");
+    if (event.streams[0]) {
+        const audio = new Audio();
+        audio.srcObject = event.streams[0];
+
+        // Otomatik çalma (modern tarayıcılarda kullanıcı etkileşimi gerekebilir)
+        audio.autoplay = true;
+
+        // Opsiyonel: Ses kontrolü için DOM'a ekle
+        document.body.appendChild(audio);
+
+        console.log("Remote stream bağlı ve ses çalmaya başladı.");
     } else {
-      console.error("Remote stream alınamadı.");
+        console.error("Remote stream alınamadı.");
     }
-  };
+};
 
   // Eğer bağlantıyı başlatan kişi ise offer oluştur
   if (isInitiator) {
