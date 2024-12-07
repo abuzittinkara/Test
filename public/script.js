@@ -30,24 +30,26 @@ socket.on("new-user", (userId) => {
 
 // Signal alımı
 socket.on("signal", async (data) => {
-  console.log("Signal alındı:", data);
-  const { from, signal } = data;
-
-  let peer;
-  if (!peers[from]) {
-    peer = initPeer(from, false);
-  } else {
-    peer = peers[from];
-  }
-
   try {
+    console.log("Signal alındı:", data);
+    const { from, signal } = data;
+
+    let peer;
+    if (!peers[from]) {
+      peer = initPeer(from, false);
+    } else {
+      peer = peers[from];
+    }
+
     if (signal.type === "offer") {
-      await handleOffer(peer, from, signal);
+      await peer.setRemoteDescription(new RTCSessionDescription(signal));
+      const answer = await peer.createAnswer();
+      await peer.setLocalDescription(answer);
+      socket.emit("signal", { to: from, signal: peer.localDescription });
     } else if (signal.type === "answer") {
       await peer.setRemoteDescription(new RTCSessionDescription(signal));
     } else if (signal.candidate) {
       await peer.addIceCandidate(new RTCIceCandidate(signal));
-      console.log("ICE Candidate eklendi:", signal);
     }
   } catch (error) {
     console.error("Signal işlenirken hata oluştu:", error);
@@ -60,12 +62,28 @@ function initPeer(userId, isInitiator) {
     iceServers: [
       { urls: "stun:stun.l.google.com:19302" },
       {
-        urls: "turn:31.223.49.197:3478", // TURN sunucunuzun IP'sini buraya ekleyin
+        urls: "turn:31.223.49.197:3478", 
         username: "webrtc_user",
         credential: "StrongP@ssw0rd123",
       },
     ],
   });
+  
+  peer.onicecandidate = (event) => {
+    if (event.candidate) {
+      console.log("ICE Candidate:", event.candidate);
+    } else {
+      console.log("ICE Candidate süreci tamamlandı.");
+    }
+  };
+  
+  peer.oniceconnectionstatechange = () => {
+    console.log("ICE Connection State:", peer.iceConnectionState);
+  };
+  
+  peer.onconnectionstatechange = () => {
+    console.log("Peer Connection State:", peer.connectionState);
+  };  
 
   peers[userId] = peer;
 
@@ -83,8 +101,11 @@ function initPeer(userId, isInitiator) {
   };
 
   peer.oniceconnectionstatechange = () => {
-    console.log("ICE bağlantı durumu:", peer.iceConnectionState);
-  };
+    console.log("ICE connection state:", peer.iceConnectionState);
+    if (peer.iceConnectionState === 'failed') {
+      console.error('ICE bağlantısı başarısız oldu!');
+    }
+  };  
 
   peer.onconnectionstatechange = () => {
     console.log("PeerConnection durumu:", peer.connectionState);
@@ -92,23 +113,19 @@ function initPeer(userId, isInitiator) {
 
   peer.ontrack = (event) => {
     console.log("Remote stream alındı:", event.streams[0]);
-    const audio = new Audio();
-    audio.srcObject = event.streams[0];
-
-    const playButton = document.getElementById('startCall');
-    playButton.addEventListener('click', () => {
-      audio.play().catch((err) => console.error("Ses oynatılamadı:", err));
-    });
-
-    console.log("Remote stream bağlı, sesi başlatmak için butona tıklayın.");
-  };
-
-  if (isInitiator) {
-    createOffer(peer, userId);
-  }
-
-  return peer;
-}
+    if (event.streams[0]) {
+      const audio = new Audio();
+      audio.srcObject = event.streams[0];
+      
+      const playButton = document.getElementById('startCall');
+      playButton.addEventListener('click', () => {
+        audio.play().catch((err) => console.error("Ses oynatılamadı:", err));
+      });
+      console.log("Remote stream bağlı, sesi başlatmak için butona tıklayın.");
+    } else {
+      console.error("Remote stream alınamadı.");
+    }
+  };  
 
 // Offer oluşturma fonksiyonu
 async function createOffer(peer, userId) {
