@@ -38,9 +38,13 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    users.delete(socket.id); // Kullanıcıyı setten çıkar
     console.log("Kullanıcı ayrıldı:", socket.id);
-  });
+    delete peers[socket.id]; // Ayrılan kullanıcının bağlantısını temizle
+    Object.keys(peers).forEach(existingUser => {
+      // Ayrılan kullanıcıya bağlı olan tüm kullanıcılarla bağlantıyı yeniden oluştur
+      createOffer(peers[existingUser], existingUser);
+    });
+  });  
 });
 
 // 10 saniyede bir bağlı kullanıcıları logla

@@ -18,14 +18,21 @@ navigator.mediaDevices.getUserMedia({ audio: true })
 socket.on("users", (users) => {
   console.log("Mevcut kullanıcılar:", users);
   users.forEach((userId) => {
-    initPeer(userId, false); // Yeni peer oluştur ve offer gönder
+    if (!peers[userId]) {
+      initPeer(userId, true); // Yeni peer oluştur ve bağlan
+    }
   });
 });
 
 // Yeni bir kullanıcı bağlandığında
 socket.on("new-user", (userId) => {
   console.log("Yeni kullanıcı bağlandı:", userId);
-  initPeer(userId, true); // Yeni peer oluştur ve answer bekle
+  // Mevcut tüm kullanıcılar yeni kullanıcıyla peer bağlantısı oluşturur
+  initPeer(userId, true);
+  Object.keys(peers).forEach(existingUser => {
+    // Yeni gelen kullanıcı mevcut kullanıcılara yeniden signal gönderir
+    createOffer(peers[existingUser], existingUser);
+  });
 });
 
 // Signal alımı
@@ -95,10 +102,11 @@ function initPeer(userId, isInitiator) {
   // ICE bağlantı durumu değişiklikleri
   peer.oniceconnectionstatechange = () => {
     console.log("ICE bağlantı durumu:", peer.iceConnectionState);
-    if (peer.iceConnectionState === "failed") {
-      console.error("ICE bağlantısı başarısız oldu!");
+    if (peer.iceConnectionState === 'failed' || peer.iceConnectionState === 'disconnected') {
+      console.error('Bağlantı başarısız oldu, yeniden başlatılıyor...');
+      createOffer(peer, userId); // Tekrar bağlantı başlat
     }
-  };
+  };  
 
   // Peer bağlantı durumu değişiklikleri
   peer.onconnectionstatechange = () => {
