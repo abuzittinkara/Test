@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Simple Voice Chat</title>
+  <title>SFU Test</title>
 </head>
 <body>
-  <h1>Simple Voice Chat</h1>
-  <!-- Eğer otomatik oynatma engellenirse, bu butona basarak sesi başlatmayı deneyebilirsiniz. -->
-  <button onclick="document.querySelectorAll('audio').forEach(a => a.play())">Sesi Başlat</button>
+  <h1>SFU Test</h1>
+  <button id="joinBtn">Odaya Katıl</button>
+  <button id="startAudio">Sesi Gönder</button>
+  <script src="https://unpkg.com/mediasoup-client@3/dist/mediasoup-client.bundle.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
 </body>

@@ -1,170 +1,107 @@
 const socket = io();
+let device;
+let rtpCapabilities;
+let sendTransport;
+let recvTransport;
 let localStream;
-let peers = {};
 
-// Mikrofon izni al
-navigator.mediaDevices.getUserMedia({ audio: true })
-  .then((stream) => {
-    console.log("Mikrofon erişimi verildi:", stream);
-    localStream = stream;
-    stream.getTracks().forEach((track) => {
-      console.log("Track tipi:", track.kind, "Durum:", track.readyState);
+document.getElementById('joinBtn').addEventListener('click', async () => {
+  socket.emit('joinRoom');
+});
+
+socket.on('routerRtpCapabilities', async (caps) => {
+  rtpCapabilities = caps;
+  device = new mediasoupClient.Device();
+  await device.load({ routerRtpCapabilities: rtpCapabilities });
+  console.log('Device yüklendi');
+});
+
+document.getElementById('startAudio').addEventListener('click', async () => {
+  localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const track = localStream.getAudioTracks()[0];
+
+  sendTransport = await createTransport('send');
+  const producer = await produce(sendTransport, track);
+  console.log('Producer oluşturuldu:', producer);
+});
+
+socket.on('newProducer', async ({ producerId }) => {
+  console.log('Yeni Producer:', producerId);
+  recvTransport = await createTransport('recv');
+  const consumerData = await consume(recvTransport, producerId);
+  console.log('Consumer oluşturuldu:', consumerData);
+
+  const { track } = consumerData;
+  const audio = new Audio();
+  audio.srcObject = new MediaStream([track]);
+  audio.play();
+});
+
+async function createTransport(direction) {
+  return new Promise((resolve, reject) => {
+    socket.emit('createTransport', (res) => {
+      if (res.error) {
+        return reject(res.error);
+      }
+      const transport = device.createTransport({
+        direction,
+        ...res
+      });
+
+      socket.emit('connectTransport', { transportId: transport.id, dtlsParameters: transport.dtlsParameters }, (connRes) => {
+        if (connRes.error) {
+          return reject(connRes.error);
+        }
+        resolve(transport);
+      });
     });
-  })
-  .catch((err) => console.error("Mikrofon erişimi reddedildi:", err));
-
-// Sunucudan mevcut kullanıcılar geldiğinde
-socket.on("users", (users) => {
-  console.log("Mevcut kullanıcılar:", users);
-  // Yeni gelen kullanıcı (biz), mevcut kullanıcılara offer gönderiyoruz.
-  users.forEach((userId) => {
-    initPeer(userId, true); // Bağlantıyı başlatan taraf
   });
-});
-
-// Yeni bir kullanıcı bağlandığında (biz mevcut bir kullanıcıysak)
-socket.on("new-user", (userId) => {
-  console.log("Yeni kullanıcı bağlandı:", userId);
-  // Bu durumda biz önceden oradaydık, yeni gelen kullanıcı offer oluşturacak.
-  // Biz answer bekleyen taraf oluyoruz.
-  initPeer(userId, false);
-});
-
-// Bir kullanıcı ayrıldığında
-socket.on("user-disconnected", (userId) => {
-  console.log("Kullanıcı ayrıldı:", userId);
-  if (peers[userId]) {
-    peers[userId].close();
-    delete peers[userId];
-  }
-});
-
-socket.on("signal", async (data) => {
-  try {
-    console.log("Signal alındı:", data);
-    const { from, signal } = data;
-
-    let peer = peers[from];
-    if (!peer) {
-      peer = initPeer(from, false);
-    }
-
-    console.log("Mevcut signalingState:", peer.signalingState);
-
-    if (signal.type === "offer") {
-      if (peer.signalingState !== "stable") {
-        console.warn("Bağlantı stable değilken yeni bir offer geldi. Bu durum beklenmeyen bir senaryo, offer yoksayılıyor.");
-        return;
-      }
-      await peer.setRemoteDescription(new RTCSessionDescription(signal));
-      const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
-      socket.emit("signal", { to: from, signal: peer.localDescription });
-
-    } else if (signal.type === "answer") {
-      if (peer.signalingState === "stable") {
-        console.warn("Bağlantı zaten stable durumda, gelen answer yoksayılıyor.");
-        return;
-      }
-      await peer.setRemoteDescription(new RTCSessionDescription(signal));
-
-    } else if (signal.candidate) {
-      try {
-        await peer.addIceCandidate(new RTCIceCandidate(signal));
-      } catch (e) {
-        console.error("ICE Candidate eklenemedi:", e);
-      }
-    }
-
-  } catch (error) {
-    console.error("Signal işlenirken hata oluştu:", error);
-  }
-});
-
-function initPeer(userId, isInitiator) {
-  const peer = new RTCPeerConnection({
-    iceServers: [
-      { urls: "stun:stun.l.google.com:19302" },
-      {
-        urls: "turn:31.223.49.197:3478",
-        username: "webrtc_user",
-        credential: "StrongP@ssw0rd123",
-      },
-    ],
-  });
-
-  peers[userId] = peer;
-
-  if (localStream) {
-    localStream.getTracks().forEach((track) => peer.addTrack(track, localStream));
-  }
-
-  peer.onicecandidate = (event) => {
-    if (event.candidate) {
-      console.log("Yeni ICE Candidate:", event.candidate);
-      socket.emit("signal", { to: userId, signal: event.candidate });
-    } else {
-      console.log("ICE Candidate süreci tamamlandı.");
-    }
-  };
-
-  peer.oniceconnectionstatechange = () => {
-    console.log("ICE Bağlantı Durumu:", peer.iceConnectionState);
-    if (peer.iceConnectionState === 'failed') {
-      console.error('ICE bağlantısı başarısız oldu!');
-    }
-  };
-
-  peer.onconnectionstatechange = () => {
-    console.log("Peer Bağlantı Durumu:", peer.connectionState);
-  };
-
-  peer.ontrack = (event) => {
-    console.log("Remote stream alındı:", event.streams[0]);
-    if (event.streams[0]) {
-      const audio = new Audio();
-      audio.srcObject = event.streams[0];
-      // Otomatik oynatmayı deneyelim
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise.catch((error) => {
-          console.warn("Otomatik oynatma engellendi, butona basılması gerekebilir:", error);
-        });
-      }
-    } else {
-      console.error("Remote stream alınamadı.");
-    }
-  };
-
-  // Offer oluştur ve gönder (eğer initiator bizsek)
-  if (isInitiator) {
-    createOffer(peer, userId);
-  }
-
-  return peer;
 }
 
-async function createOffer(peer, userId) {
-  try {
-    const offer = await peer.createOffer();
-    await peer.setLocalDescription(offer);
-    console.log("Offer oluşturuldu ve gönderildi:", offer);
-    socket.emit("signal", { to: userId, signal: peer.localDescription });
-  } catch (error) {
-    console.error("Offer oluşturulurken hata oluştu:", error);
-  }
+async function produce(transport, track) {
+  return new Promise((resolve, reject) => {
+    const params = {
+      transportId: transport.id,
+      kind: track.kind,
+      rtpParameters: device.rtpCapabilities
+    };
+
+    const senderRtpParams = {
+      ...transport.rtpCapabilities,
+      encodings: [{ maxBitrate: 128000 }] // Basit ayar
+    };
+
+    // Gerçek uygulamada, rtpParameters track'ten alınmaz, "getRtpParameters" gerekebilir
+    // Basitlik için şu an direkt device.rtpCapabilities kullanılıyor.
+    transport.produce({ track })
+      .then(producer => {
+        resolve(producer);
+      })
+      .catch(e => reject(e));
+  });
 }
 
-// WebSocket durum logları
-socket.on("connect", () => {
-  console.log("WebSocket bağlantısı kuruldu. Kullanıcı ID:", socket.id);
-});
+async function consume(transport, producerId) {
+  return new Promise((resolve, reject) => {
+    socket.emit('consume', {
+      transportId: transport.id,
+      producerId: producerId,
+      rtpCapabilities: device.rtpCapabilities
+    }, (res) => {
+      if (res.error) {
+        return reject(res.error);
+      }
+      const consumer = transport.consume({
+        id: res.id,
+        producerId: res.producerId,
+        kind: res.kind,
+        rtpParameters: res.rtpParameters
+      });
+      consumer.then(c => {
+        resolve({ consumer: c, track: c.track });
+      }).catch(e => reject(e));
+    });
+  });
+}
 
-socket.on("disconnect", () => {
-  console.log("WebSocket bağlantısı kesildi.");
-});
-
-// Debug amaçlı periyodik log
-setInterval(() => {
-  console.log("Mevcut PeerConnection'lar:", peers);
-}, 10000);
+// Mediasoup Client eklenmeli (CDN veya npm ile)
