@@ -44,26 +44,38 @@ socket.on("signal", async (data) => {
     console.log("Signal alındı:", data);
     const { from, signal } = data;
 
-    let peer;
-    if (!peers[from]) {
-      // Mevcut olmayan bir peer için yeni peer oluştur
-      // Offer alıyorsak isInitiator=false, answer alıyorsak yine false ama zaten peer var.
-      // Bu aşamada peer yoksa karşı taraf offer göndermiştir, biz answer üreteceğiz.
+    let peer = peers[from];
+    if (!peer) {
       peer = initPeer(from, false);
-    } else {
-      peer = peers[from];
     }
 
+    console.log("Mevcut signalingState:", peer.signalingState);
+
     if (signal.type === "offer") {
+      if (peer.signalingState !== "stable") {
+        console.warn("Bağlantı stable değilken yeni bir offer geldi. Bu durum beklenmeyen bir senaryo, offer yoksayılıyor.");
+        return;
+      }
       await peer.setRemoteDescription(new RTCSessionDescription(signal));
       const answer = await peer.createAnswer();
       await peer.setLocalDescription(answer);
       socket.emit("signal", { to: from, signal: peer.localDescription });
+
     } else if (signal.type === "answer") {
+      if (peer.signalingState === "stable") {
+        console.warn("Bağlantı zaten stable durumda, gelen answer yoksayılıyor.");
+        return;
+      }
       await peer.setRemoteDescription(new RTCSessionDescription(signal));
+
     } else if (signal.candidate) {
-      await peer.addIceCandidate(new RTCIceCandidate(signal));
+      try {
+        await peer.addIceCandidate(new RTCIceCandidate(signal));
+      } catch (e) {
+        console.error("ICE Candidate eklenemedi:", e);
+      }
     }
+
   } catch (error) {
     console.error("Signal işlenirken hata oluştu:", error);
   }
