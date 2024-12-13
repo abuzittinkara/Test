@@ -3,7 +3,8 @@ let localStream;
 let peers = {};
 let audioPermissionGranted = false;
 let remoteAudios = []; 
-let username = null; // Kullanıcı adını burada saklayacağız
+let username = null; 
+let currentGroup = null; // Kullanıcının katıldığı grup
 
 // Bu diziler, "Sesi Başlat" butonuna basana kadar gelen kullanıcıları saklamak için
 let pendingUsers = [];
@@ -24,19 +25,27 @@ const deleteGroupName = document.getElementById('deleteGroupName');
 const deleteGroupButton = document.getElementById('deleteGroupButton');
 const goToCallButton = document.getElementById('goToCallButton');
 
-// Başlangıçta sadece username ekranı görünsün
-usernameScreen.style.display = 'block';
-groupScreen.style.display = 'none';
-callScreen.style.display = 'none';
+// Ekran geçiş fonksiyonu
+function showScreen(screenId) {
+  usernameScreen.classList.remove('active');
+  groupScreen.classList.remove('active');
+  callScreen.classList.remove('active');
+
+  if (screenId === 'usernameScreen') usernameScreen.classList.add('active');
+  if (screenId === 'groupScreen') groupScreen.classList.add('active');
+  if (screenId === 'callScreen') callScreen.classList.add('active');
+}
+
+// Başlangıçta username ekranı
+showScreen('usernameScreen');
 
 // Kullanıcı "Devam Et" butonuna basınca kullanıcı adı al
 continueButton.addEventListener('click', () => {
   const val = usernameInput.value.trim();
   if(val) {
     username = val;
-    usernameScreen.style.display = 'none';
-    groupScreen.style.display = 'block';
     displayUsername.textContent = username;
+    showScreen('groupScreen');
   } else {
     alert("Lütfen bir kullanıcı adı girin.");
   }
@@ -62,8 +71,11 @@ deleteGroupButton.addEventListener('click', () => {
 
 // Sesli iletişim ekranına geç
 goToCallButton.addEventListener('click', () => {
-  groupScreen.style.display = 'none';
-  callScreen.style.display = 'block';
+  if (!currentGroup) {
+    alert("Önce bir gruba katılmalısınız.");
+    return;
+  }
+  showScreen('callScreen');
 });
 
 // "Sesi Başlat" butonuna basıldığında mikrofon izni iste
@@ -97,21 +109,19 @@ startCallButton.addEventListener('click', () => {
     .catch((err) => console.error("Mikrofon erişimi reddedildi:", err));
 });
 
-// Sunucudan mevcut kullanıcılar geldiğinde, localStream henüz yoksa sakla
+// Sunucudan mevcut kullanıcılar
 socket.on("users", (users) => {
   console.log("Mevcut kullanıcılar:", users);
   if (audioPermissionGranted && localStream) {
-    // Local stream var, direkt peer oluştur
     users.forEach((userId) => {
       initPeer(userId, true); 
     });
   } else {
-    // Local stream henüz yok, bekle
     pendingUsers = users;
   }
 });
 
-// Yeni bir kullanıcı bağlandığında, localStream yoksa sakla, varsa direkt peer oluştur
+// Yeni kullanıcı
 socket.on("new-user", (userId) => {
   console.log("Yeni kullanıcı bağlandı:", userId);
   if (audioPermissionGranted && localStream) {
@@ -126,7 +136,15 @@ socket.on("groups", (groups) => {
   groupList.innerHTML = '';
   groups.forEach(g => {
     const li = document.createElement('li');
-    li.textContent = g;
+    li.textContent = g.name;
+
+    // Gruba tıklayınca kullanıcı o gruba "katılmış" olur
+    li.addEventListener('click', () => {
+      currentGroup = g.name;
+      goToCallButton.disabled = false;
+      alert(`"${g.name}" grubuna katıldınız. Şimdi "Sesli İletişime Geç" butonuna basabilirsiniz.`);
+    });
+
     groupList.appendChild(li);
   });
 });
@@ -162,7 +180,6 @@ function initPeer(userId, isInitiator) {
   const peer = new RTCPeerConnection({
     iceServers: [
       { urls: "stun:stun.l.google.com:19302" },
-      // Gerekirse TURN sunucusu ekleyin
     ],
   });
   peers[userId] = peer;
@@ -191,14 +208,13 @@ function initPeer(userId, isInitiator) {
   };
 
   peer.ontrack = (event) => {
-    console.log("Remote stream alındı ama ses hemen başlatılmayacak, izin bekleniyor...");
+    console.log("Remote stream alındı, izin varsa oynatılacak...");
     const audio = new Audio();
     audio.srcObject = event.streams[0];
     audio.autoplay = false; 
     audio.muted = false;
     remoteAudios.push(audio);
 
-    // Eğer butona basılıp izin verilmişse direk oynat
     if (audioPermissionGranted) {
       audio.play().catch(err => console.error("Ses oynatılamadı:", err));
     }

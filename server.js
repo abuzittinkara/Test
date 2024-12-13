@@ -7,9 +7,9 @@ const server = http.createServer(app);
 const io = socketIO(server);
 
 const users = new Set();
-let groups = []; // Gruplar burada tutuluyor örnek olarak
+let groups = []; // { name: 'Grup Adı', owner: 'socketid' }
 
-app.use(express.static("public")); // Static files (frontend)
+app.use(express.static("public"));
 
 io.on("connection", (socket) => {
   console.log("Kullanıcı bağlandı:", socket.id);
@@ -26,37 +26,38 @@ io.on("connection", (socket) => {
 
   // Grup oluşturma
   socket.on("create-group", (groupName) => {
-    if (groupName && !groups.includes(groupName)) {
-      groups.push(groupName);
-      io.emit("groups", groups); // Tüm kullanıcılara güncellenmiş grup listesini gönder
-      console.log(`Grup oluşturuldu: ${groupName}`);
+    if (groupName && !groups.find(g => g.name === groupName)) {
+      const newGroup = { name: groupName, owner: socket.id };
+      groups.push(newGroup);
+      io.emit("groups", groups);
+      console.log(`Grup oluşturuldu: ${groupName}, owner: ${socket.id}`);
     }
   });
 
   // Grup silme
   socket.on("delete-group", (groupName) => {
-    const index = groups.indexOf(groupName);
+    const index = groups.findIndex(g => g.name === groupName);
     if (index !== -1) {
-      groups.splice(index, 1);
-      io.emit("groups", groups);
-      console.log(`Grup silindi: ${groupName}`);
+      const group = groups[index];
+      // Sadece owner ise silebilir
+      if (group.owner === socket.id) {
+        groups.splice(index, 1);
+        io.emit("groups", groups);
+        console.log(`Grup silindi: ${groupName}`);
+      } else {
+        console.log(`Yetkisiz silme denemesi: ${groupName}`);
+      }
     }
   });
 
   socket.on("signal", (data) => {
-    console.log("Signal alındı:", data);
     if (data.to) {
       if (users.has(data.to)) {
         io.to(data.to).emit("signal", {
           from: socket.id,
           signal: data.signal,
         });
-        console.log("Signal iletildi:", data);
-      } else {
-        console.log(`Hedef kullanıcı (${data.to}) mevcut değil.`);
       }
-    } else {
-      console.log("Hedef kullanıcı yok:", data.to);
     }
   });
 
@@ -66,7 +67,6 @@ io.on("connection", (socket) => {
   });
 });
 
-// Her 10 sn'de bir kullanıcıları logla
 setInterval(() => {
   console.log("Bağlı kullanıcılar:", Array.from(users));
 }, 10000);
