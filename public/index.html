@@ -1,113 +1,143 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>WebRTC Grup Sohbeti</title>
-    <style>
-      body {
-        margin: 0;
-        padding: 0;
-        font-family: sans-serif;
-        background: #f5f5f5;
-        color: #333;
-      }
-      .container {
-        max-width: 500px;
-        margin: 40px auto;
-        background: #fff;
-        padding: 20px;
-        border-radius: 8px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-      }
-      h2, h1, h3 {
-        margin-top: 0;
-      }
-      input[type=text], button {
-        padding: 10px;
-        margin-bottom: 10px;
-        border-radius: 4px;
-        border: 1px solid #ccc;
-      }
-      button {
-        cursor: pointer;
-        background: #007bff;
-        color: #fff;
-        border: none;
-        transition: background 0.3s;
-      }
-      button:hover:enabled {
-        background: #0056b3;
-      }
-      button:disabled {
-        background: #ccc;
-        cursor: not-allowed;
-      }
-      ul {
-        list-style: none;
-        padding: 0;
-      }
-      ul li {
-        padding: 10px;
-        border: 1px solid #eee;
-        margin-bottom: 5px;
-        border-radius: 4px;
-        cursor: pointer;
-        transition: background 0.3s;
-      }
-      ul li:hover {
-        background: #eee;
-      }
-      #usernameScreen, #groupScreen, #callScreen {
-        display: none;
-      }
-      .active {
-        display: block;
-      }
-      .group-actions input {
-        width: calc(100% - 110px);
-        margin-right: 5px;
-      }
-      .btn-inline {
-        display: inline-block;
-        width: auto;
-      }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>WebRTC Grup Sohbeti</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: "Open Sans", sans-serif;
+      background: #f0f0f0;
+      color: #333;
+    }
+    .container {
+      max-width: 400px;
+      margin: 50px auto;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+    header {
+      background: #007bff;
+      color: #fff;
+      padding: 20px;
+      text-align: center;
+    }
+    .content {
+      padding: 20px;
+    }
+    h2, h3, h1 {
+      margin-top: 0;
+      margin-bottom: 20px;
+    }
+    p {
+      margin-bottom: 20px;
+      line-height: 1.4;
+    }
+    input[type=text] {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 15px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    button {
+      display: inline-block;
+      padding: 10px 15px;
+      background: #007bff;
+      border: none;
+      border-radius: 4px;
+      color: #fff;
+      cursor: pointer;
+      margin-bottom: 10px;
+    }
+    button:hover:enabled {
+      background: #0056b3;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+      margin-bottom: 20px;
+    }
+    ul li {
+      padding: 10px;
+      background: #fafafa;
+      border: 1px solid #eee;
+      margin-bottom: 5px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    ul li:hover {
+      background: #eee;
+    }
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .actions input[type=text] {
+      flex: 1;
+    }
+
+    /* Ekranları yönetmek için */
+    #usernameScreen, #groupScreen, #callScreen {
+      display: none;
+    }
+    .active {
+      display: block;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div id="usernameScreen" class="active">
-            <h2>Kullanıcı Adı Belirleyin</h2>
-            <input type="text" id="usernameInput" placeholder="Kullanıcı adınız" />
-            <button id="continueButton">Devam Et</button>
-        </div>        
-
-      <div id="groupScreen">
-          <h2>Merhaba <span id="displayUsername"></span></h2>
-          <h3>Gruplar</h3>
-          <ul id="groupList"></ul>
-
-          <div class="group-actions">
-            <input type="text" id="newGroupName" placeholder="Yeni grup adı" />
-            <button id="createGroupButton">Grup Oluştur</button>
-          </div>
-
-          <div class="group-actions">
-            <input type="text" id="deleteGroupName" placeholder="Silinecek grup adı" />
-            <button id="deleteGroupButton">Grup Sil</button>
-          </div>
-
-          <button id="goToCallButton" disabled>Sesli İletişime Geç</button>
+  <div class="container">
+    <header>
+      <h1>WebRTC Grup Sohbeti</h1>
+    </header>
+    <div class="content">
+      <!-- Kullanıcı adı ekranı -->
+      <div id="usernameScreen" class="active">
+        <h2>Kullanıcı Adı Belirleyin</h2>
+        <p>Lütfen bir kullanıcı adı belirleyin ve devam edin.</p>
+        <input type="text" id="usernameInput" placeholder="Kullanıcı adınız" />
+        <button id="continueButton">Devam Et</button>
       </div>
 
+      <!-- Grup ekranı -->
+      <div id="groupScreen">
+        <h2>Merhaba <span id="displayUsername"></span></h2>
+        <h3>Gruplar</h3>
+        <p>Mevcut gruplara katılmak için üzerine tıklayın veya yeni bir grup oluşturun.</p>
+        <ul id="groupList"></ul>
+        <div class="actions">
+          <input type="text" id="newGroupName" placeholder="Yeni grup adı" />
+          <button id="createGroupButton">Grup Oluştur</button>
+        </div>
+        <div class="actions">
+          <input type="text" id="deleteGroupName" placeholder="Silinecek grup adı" />
+          <button id="deleteGroupButton">Grup Sil</button>
+        </div>
+        <button id="goToCallButton" disabled>Sesli İletişime Geç</button>
+      </div>
+
+      <!-- Sesli iletişim ekranı -->
       <div id="callScreen">
-          <h1>WebRTC Ses İletimi</h1>
-          <p>“Sesi Başlat” butonuna tıklayın, ardından başka kullanıcılar katıldığında seslerini sayfa yenilemeden duyabileceksiniz.</p>
-          <button id="startCall">Sesi Başlat</button>
+        <h2>Sesli İletişim</h2>
+        <p>“Sesi Başlat” butonuna tıklayın, ardından başka kullanıcılar katıldığında seslerini sayfa yenilemeden duyabileceksiniz.</p>
+        <button id="startCall">Sesi Başlat</button>
       </div>
     </div>
+  </div>
 
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="script.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>
