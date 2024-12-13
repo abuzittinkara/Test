@@ -29,7 +29,7 @@
     .content {
       padding: 20px;
     }
-    h2, h3, h1 {
+    h2, h1, h3 {
       margin-top: 0;
       margin-bottom: 20px;
     }
@@ -93,7 +93,7 @@
       display: none;
     }
     .active {
-      display: block;
+      display: block; 
     }
   </style>
 </head>
@@ -103,7 +103,8 @@
       <h1>WebRTC Grup Sohbeti</h1>
     </header>
     <div class="content">
-      <!-- Kullanıcı adı ekranı -->
+
+      <!-- Kullanıcı adı ekranı - İlk açılışta aktif -->
       <div id="usernameScreen" class="active">
         <h2>Kullanıcı Adı Belirleyin</h2>
         <p>Lütfen bir kullanıcı adı belirleyin ve devam edin.</p>
@@ -134,6 +135,7 @@
         <p>“Sesi Başlat” butonuna tıklayın, ardından başka kullanıcılar katıldığında seslerini sayfa yenilemeden duyabileceksiniz.</p>
         <button id="startCall">Sesi Başlat</button>
       </div>
+      
     </div>
   </div>
 
