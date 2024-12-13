@@ -11,13 +11,22 @@ let pendingNewUsers = [];
 
 // Ekran elementleri
 const usernameScreen = document.getElementById('usernameScreen');
+const groupScreen = document.getElementById('groupScreen');
 const callScreen = document.getElementById('callScreen');
 const usernameInput = document.getElementById('usernameInput');
 const continueButton = document.getElementById('continueButton');
 const startCallButton = document.getElementById('startCall');
+const displayUsername = document.getElementById('displayUsername');
+const groupList = document.getElementById('groupList');
+const newGroupName = document.getElementById('newGroupName');
+const createGroupButton = document.getElementById('createGroupButton');
+const deleteGroupName = document.getElementById('deleteGroupName');
+const deleteGroupButton = document.getElementById('deleteGroupButton');
+const goToCallButton = document.getElementById('goToCallButton');
 
 // Başlangıçta sadece username ekranı görünsün
 usernameScreen.style.display = 'block';
+groupScreen.style.display = 'none';
 callScreen.style.display = 'none';
 
 // Kullanıcı "Devam Et" butonuna basınca kullanıcı adı al
@@ -26,10 +35,35 @@ continueButton.addEventListener('click', () => {
   if(val) {
     username = val;
     usernameScreen.style.display = 'none';
-    callScreen.style.display = 'block';
+    groupScreen.style.display = 'block';
+    displayUsername.textContent = username;
   } else {
     alert("Lütfen bir kullanıcı adı girin.");
   }
+});
+
+// Grup oluştur butonu
+createGroupButton.addEventListener('click', () => {
+  const gName = newGroupName.value.trim();
+  if (gName) {
+    socket.emit("create-group", gName);
+    newGroupName.value = '';
+  }
+});
+
+// Grup sil butonu
+deleteGroupButton.addEventListener('click', () => {
+  const gName = deleteGroupName.value.trim();
+  if (gName) {
+    socket.emit("delete-group", gName);
+    deleteGroupName.value = '';
+  }
+});
+
+// Sesli iletişim ekranına geç
+goToCallButton.addEventListener('click', () => {
+  groupScreen.style.display = 'none';
+  callScreen.style.display = 'block';
 });
 
 // "Sesi Başlat" butonuna basıldığında mikrofon izni iste
@@ -87,6 +121,16 @@ socket.on("new-user", (userId) => {
   }
 });
 
+// Gruplar güncellendiğinde listeyi yenile
+socket.on("groups", (groups) => {
+  groupList.innerHTML = '';
+  groups.forEach(g => {
+    const li = document.createElement('li');
+    li.textContent = g;
+    groupList.appendChild(li);
+  });
+});
+
 // Sinyal alımı
 socket.on("signal", async (data) => {
   console.log("Signal alındı:", data);
@@ -94,8 +138,6 @@ socket.on("signal", async (data) => {
 
   let peer;
   if (!peers[from]) {
-    // Bu kullanıcı için henüz peer yoksa localStream ve izin bekleniyor olabilir
-    // Ancak bu noktaya geldiyse muhtemelen localStream var.
     peer = initPeer(from, false);
   } else {
     peer = peers[from];

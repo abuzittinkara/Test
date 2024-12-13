@@ -7,6 +7,7 @@ const server = http.createServer(app);
 const io = socketIO(server);
 
 const users = new Set();
+let groups = []; // Gruplar burada tutuluyor örnek olarak
 
 app.use(express.static("public")); // Static files (frontend)
 
@@ -17,8 +18,30 @@ io.on("connection", (socket) => {
   // Mevcut kullanıcılar
   socket.emit("users", Array.from(users).filter((id) => id !== socket.id));
 
-  // Diğer kullanıcılara yeni kullanıcı bilgisi
+  // Mevcut grupları gönder
+  socket.emit("groups", groups);
+
+  // Diğer kullanıcılara yeni kullanıcının bağlandığını bildir
   socket.broadcast.emit("new-user", socket.id);
+
+  // Grup oluşturma
+  socket.on("create-group", (groupName) => {
+    if (groupName && !groups.includes(groupName)) {
+      groups.push(groupName);
+      io.emit("groups", groups); // Tüm kullanıcılara güncellenmiş grup listesini gönder
+      console.log(`Grup oluşturuldu: ${groupName}`);
+    }
+  });
+
+  // Grup silme
+  socket.on("delete-group", (groupName) => {
+    const index = groups.indexOf(groupName);
+    if (index !== -1) {
+      groups.splice(index, 1);
+      io.emit("groups", groups);
+      console.log(`Grup silindi: ${groupName}`);
+    }
+  });
 
   socket.on("signal", (data) => {
     console.log("Signal alındı:", data);
